@@ -1,5 +1,6 @@
 """Evaluation module."""
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix
 
 PROFIT_TP = 15000
 COST_FN = 10000

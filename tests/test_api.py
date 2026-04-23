@@ -49,5 +49,6 @@ def test_explain():
     
     data = response.json()
     
-    assert "shap_values" in data
+    assert "top_positive_factors" in data
+    assert "top_negative_factors" in data
     assert isinstance(data["shap_values"], list)
