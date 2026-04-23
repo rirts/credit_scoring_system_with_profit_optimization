@@ -92,18 +92,20 @@ German Credit Dataset (UCI ML Repository):
 
 ## Project Structure
 
+```bash
 credit_scoring_project/
-├── data/
-├── notebooks/
+├── data/              # raw and processed datasets
+├── notebooks/         # EDA and experimentation
 ├── src/
-│ ├── data/
-│ ├── features/
-│ ├── models/
-│ ├── evaluation/
-│ └── api/
-├── models/
-├── reports/
-├── tests/
+│   ├── data/          # data loading
+│   ├── features/      # feature engineering
+│   ├── models/        # training pipeline
+│   ├── evaluation/    # business metrics
+│   └── api/           # FastAPI service
+├── models/            # serialized artifacts
+├── reports/           # outputs and analysis
+├── tests/             # API tests
+```
 
 ### Workflow
 Raw data → preprocessing → feature engineering → modeling → calibration → threshold optimization → fairness → API deployment
