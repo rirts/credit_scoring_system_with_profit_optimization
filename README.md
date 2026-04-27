@@ -1,94 +1,136 @@
-# Credit Scoring System with Profit Optimization
+# Credit Decision System with Profit Optimization
 
-An end-to-end machine learning system for credit risk modeling, designed to align predictive performance with **real financial outcomes**.
+An end-to-end credit decision system that separates **risk estimation, decision policy, and business strategy**.
 
-This project goes beyond traditional classification by optimizing decisions based on **expected profit**, while ensuring explainability, fairness, and production readiness.
+Instead of optimizing for accuracy, the system maximizes **expected profit**, enabling different lending strategies (conservative, balanced, growth) using the same model.
+
+Key Capabilities:
+- Probability of default estimation (calibrated XGBoost)
+- Profit-driven decision policy (threshold optimization)
+- Monitoring and drift detection (PSI)
+- Alerting and system health checks
+- Explainability (SHAP)
+- Fairness evaluation and mitigation
+- Production-ready API (FastAPI)
+
+The key idea: **model performance alone is not enough, decisions must be aligned with business objectives.**
 
 ## Problem Statement
 
-Financial institutions must balance two competing risks:
+Credit decisions involve a fundamental trade-off:
 
-- Approving high-risk clients → financial loss (defaults)
-- Rejecting low-risk clients → lost revenue
+- Approving risky clients leads to financial losses  
+- Rejecting good clients leads to missed revenue  
 
-Most ML models optimize for accuracy or AUC, which **do not reflect real business impact**.
+Traditional ML models optimize metrics like AUC, but **do not directly translate predictions into business decisions**.
 
-This project addresses that gap by building a system that:
+This system addresses that gap by explicitly separating:
 
-- Predicts probability of default
-- Optimizes decision thresholds based on profit
-- Explains decisions using SHAP
-- Evaluates and mitigates fairness risks
-- Deploys the model via a FastAPI API
+- Risk estimation (probability of default)  
+- Decision policy (threshold optimization)  
+- Business context (costs and profit)  
+
+This enables decisions that are directly aligned with financial outcomes.
+
+## System Architecture
+
+The system is designed as a modular decision engine:
+
+1. **Risk Model**
+   - Predicts probability of default using a calibrated XGBoost model
+
+2. **Decision Policy**
+   - Applies a threshold optimized for expected profit
+   - Can be adjusted to reflect different business strategies
+
+3. **Monitoring Layer**
+   - Tracks predictions over time
+   - Computes approval rate, risk distribution, and portfolio metrics
+
+4. **Drift Detection**
+   - Uses Population Stability Index (PSI) to detect distribution changes
+   - Prevents unreliable conclusions with minimum sample thresholds
+
+5. **Alerting System**
+   - Triggers warnings based on drift and business KPIs
+
+6. **Reporting Layer**
+   - Translates system behavior into business-readable summaries
+
+This separation allows the same model to behave differently depending on business context.
+
+## How It Works (End-to-End)
+
+1. A customer request is sent to the API (`/predict`)
+2. The model estimates probability of default
+3. A profit-optimized threshold is applied
+4. The decision (approve/reject) is returned
+5. The prediction is logged and stored for monitoring
+6. Monitoring endpoints expose system performance in real time
+7. Health checks evaluate drift and operational risk
+8. A business summary can be retrieved via `/report`
+
+This simulates a real-world credit decision flow, from prediction to monitoring.
+
+## Example Usage
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"status":"A11","duration":12,"credit_amount":2500,"age":35,...}'
+```
+```json
+{
+  "default_probability": 0.38,
+  "prediction": 1
+}
+```
+
+**Interpretation:**
+- `default_probability` → estimated probability of default
+- `prediction = 1` → client classified as high risk (rejected)
+- `prediction = 0` → client classified as low risk (approved)
 
 ## Key Results
-Key results depend on the trained model and may vary across runs.
 
 In the latest training cycle:
 
-- Optimized threshold: ~0.18
+- Decision threshold: ~0.18 (profit-optimized)
 - Approval rate: ~65–70%
 - Default rate: ~10–15%
-- Positive expected profit under business constraints
+- Positive expected profit under baseline assumptions
 
-The system is designed to **adapt dynamically** based on data and cost assumptions, rather than relying on fixed thresholds.
+The system maintains stable decision behavior across cross-validation folds (low threshold variance), indicating robustness.
+
+Results are not tied to a fixed threshold, the system adapts dynamically to data and business cost structures.
 
 ## Business Case Simulation
 
-We evaluate three representative customer profiles:
+The system was tested on three representative profiles:
 
-### Low-Risk Customer
+- **Low-risk customer (~0.5%)** → Approved  
+- **High-risk customer (~65%)** → Rejected  
+- **Borderline customer (~24%)** → Rejected  
 
-- Default probability: ~0.5%
-- Decision: APPROVED
+This highlights a key behavior:
 
-The model identifies strong financial stability (low exposure, good credit history), leading to confident approvals.
-
-### High-Risk Customer
-
-- Default probability: ~65%
-- Decision: REJECTED
-
-Risk is driven by long credit duration and unstable financial indicators, which significantly increase expected loss.
-
-### Borderline Customer
-
-- Default probability: ~24%
-- Decision: REJECTED
-
-Although not clearly high-risk, the model rejects this profile due to expected financial loss.
-
-This highlights a key design choice:
-
-The system favors **profitability over approval rate**, rejecting borderline cases that traditional models might accept.
-
-### Explainability Insights (SHAP)
-
-Each decision is supported by feature-level explanations:
-
-- Low-risk customers show strong negative contributions from features such as:
-  - Short duration
-  - Low credit amount
-  - Strong credit history
-
-- High-risk customers are driven by:
-  - Long duration
-  - Higher credit exposure
-  - Weak financial indicators
-
-- Borderline cases highlight trade-offs:
-  - Some features push toward approval
-  - Others increase risk, leading to rejection under profit optimization
-
-This allows analysts to **justify individual credit decisions**, not just predict them.
+The system prioritizes **profitability over approval rate**, rejecting borderline cases when expected loss outweighs potential gain.
 
 ## Dataset
 
-German Credit Dataset (UCI ML Repository):
+The system is built on the German Credit dataset (UCI Repository), containing:
 
 - 1000 observations
-- 20 variables (numerical + categorical)
+- 20 features (categorical + numerical)
 - Binary target (default / no default)
+
+While the dataset is relatively small, the focus of this project is not on scale, but on:
+
+- Decision system design  
+- Business-driven optimization  
+- Production-style architecture  
+
+The same system can be extended to larger, real-world datasets without changes in design.
 
 ## Project Structure
 
@@ -103,23 +145,24 @@ credit_scoring_project/
 │   ├── evaluation/    # business metrics
 │   └── api/           # FastAPI service
 ├── models/            # serialized artifacts
-├── reports/           # outputs and analysis
+├── reports/           # monitoring outputs and business summaries
 ├── tests/             # API tests
 ```
 
+## Model Artifacts
+
+The system persists key artifacts generated during training:
+
+- `models/model.pkl` → calibrated model (XGBoost + calibration)
+- `models/preprocessor.pkl` → feature transformation pipeline
+- `models/threshold.pkl` → profit-optimized decision threshold
+- `models/train_scores.pkl` → training probability distribution (baseline for drift)
+- `models/background.pkl` → SHAP background dataset
+
+These artifacts decouple training from inference, enabling reproducible and consistent predictions in production.
+
 ### Workflow
 Raw data → preprocessing → feature engineering → modeling → calibration → threshold optimization → fairness → API deployment
-
-## ML Pipeline
-
-- Data preprocessing (scaling + encoding)
-- Logistic Regression (baseline)
-- XGBoost (tuned model)
-- Probability calibration (isotonic)
-- Profit-driven threshold optimization
-- Cross-validation for threshold stability
-- Fairness evaluation and mitigation
-- SHAP-based explainability
 
 ## Model Performance
 
@@ -130,34 +173,29 @@ Raw data → preprocessing → feature engineering → modeling → calibration 
 
 **Key trade-off**: Recall improved significantly (0.53 → 0.77), reducing missed defaults, at the cost of more conservative approvals.
 
-## Explainability (SHAP)
+## Model Transparency
 
-SHAP is used to provide **individual-level explanations**.
+### Explainability (SHAP)
 
-Key drivers of risk:
+The system provides feature-level explanations for each decision:
 
-- Higher credit amount → increases default probability
-- Longer loan duration → increases risk
-- Strong credit history → reduces risk
+- Higher credit amount → increases risk  
+- Longer duration → increases risk  
+- Strong credit history → reduces risk  
 
-This enables transparent decision-making for both analysts and stakeholders.
+This enables analysts to justify individual decisions.
 
-## Fairness Analysis
+### Fairness
 
-Metrics evaluated:
+The system evaluates fairness across demographic groups:
 
-- Demographic Parity
-- Equal Opportunity
-
-Findings:
-
-- Higher rejection rates among younger applicants
-- Similar risk detection performance across groups
+- Higher rejection rates among younger applicants  
+- Similar risk detection performance across groups  
 
 Mitigation:
 
-- Group-specific thresholds reduced disparities
-- Trade-off: slight increase in risk, but improved fairness
+- Group-specific thresholds reduce disparities  
+- Trade-off: slight increase in risk for improved fairness
 
 ## Threshold Optimization
 Instead of using a default threshold (0.5), the system selects a threshold that maximizes profit.
@@ -185,20 +223,6 @@ Endpoints:
 
 - `POST /explain` → Returns top SHAP feature contributions
 
-**Example Request:**
-``` bash
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"status":"A11","duration":12,"credit_amount":2500,"age":35,...}'
-```
-**Example Response:**
-``` json
-{
-  "default_probability": 0.38,
-  "prediction": 1
-}
-```
-
 ### API Architecture
 
 - FastAPI-based service
@@ -206,17 +230,55 @@ curl -X POST http://localhost:8000/predict \
 - Probability calibration handled inside the model
 - SHAP TreeExplainer for real-time explainability
 
-Endpoints:
+### Core Endpoints
 
-- `/predict`
-  - Input: raw customer features
-  - Output: probability of default + decision
+- `POST /predict`  
+  Returns:
+  - probability of default
+  - approval / rejection decision
 
-- `/explain`
-  - Input: same payload
-  - Output: top positive and negative feature contributions
+- `POST /explain`  
+  Returns:
+  - top positive risk drivers
+  - top negative risk drivers
 
-The API simulates a real-world credit decision engine, enabling both prediction and interpretability in production.
+### Monitoring Endpoints
+
+- `GET /metrics`  
+  Returns:
+  - total predictions
+  - approval rate
+  - average portfolio risk
+  - risk distribution
+
+- `GET /health`  
+  Returns:
+  - system status
+  - drift analysis
+  - active alerts
+
+- `GET /report`  
+  Returns:
+  - business-readable system summary
+
+The API exposes both:
+
+- **Decision services** for real-time credit evaluation
+- **Operational services** for monitoring model behavior in production
+
+This mirrors how production ML systems separate prediction from observability.
+
+### Monitoring Logic
+
+- Metrics are computed on accumulated predictions (not per request)
+- Drift detection (PSI) is only evaluated when sufficient data is available
+- Alerts are triggered based on:
+  - abnormal approval rate
+  - elevated portfolio risk
+  - significant distribution drift
+- Predictions are stored in-memory for monitoring purposes (can be extended to persistent storage)
+
+This prevents noisy signals and ensures reliable monitoring decisions.
 
 ## Run Locally
 
@@ -234,27 +296,53 @@ uvicorn src.api.main:app --reload
 
 ## Production Considerations
 
-- Threshold recalibration required if business costs change
-- Model performance depends on data distribution stability
-- SHAP explanations depend on the underlying tree model
-- Fairness interventions may impact profitability
+- Current monitoring layer simulates production behavior; persistence and scheduling can be added for full deployment
+- Model performance depends on data distribution stability (monitored via PSI)
+- Decision thresholds must be aligned with business costs and can be recalibrated
+- Monitoring endpoints provide visibility into approval rate and portfolio risk
+- Alerting system highlights anomalies in real time
+- Drift detection prevents silent model degradation
 
 Potential extensions:
-
-- Model monitoring (data drift, prediction drift)
-- Automated retraining pipelines
-- Feature store integration
-- A/B testing for threshold strategies
+- Automated retraining pipelines triggered by drift
+- Dashboard for executive monitoring
+- Champion/Challenger model comparison
 
 ## Conclusion
 
-This project demonstrates how to move from a traditional ML model to a **decision system aligned with business objectives**.
+This project demonstrates how to move from a predictive model to a **production-style decision system**.
 
-Instead of optimizing for accuracy, the system:
+Instead of optimizing for accuracy, it:
 
-- Optimizes decisions based on profit
-- Explains outcomes at the individual level
-- Evaluates fairness trade-offs
-- Is deployable as a real API service
+- Aligns decisions with financial outcomes  
+- Separates modeling from business strategy  
+- Provides monitoring, drift detection, and alerting  
+- Translates technical outputs into business insights  
 
-This reflects how modern credit risk systems operate in practice, where **decision quality matters more than model metrics**.
+This reflects how modern data systems operate in practice:  
+**models do not create value, decision systems do.**
+
+## System Design Philosophy
+
+The system is built around a key principle:
+
+A model is only one component of a decision system.
+
+By separating:
+
+- prediction (risk)
+- decision logic (threshold)
+- business assumptions (costs)
+
+the system becomes flexible, interpretable, and aligned with real-world operations.
+
+This design allows the same model to support multiple strategies without retraining.
+
+## Limitations
+
+- Small dataset (1000 observations) limits generalization
+- Proxy variables used for fairness analysis may not reflect real demographics
+- Drift detection is based on prediction distribution, not raw feature drift
+- Business cost assumptions are static and may change over time
+
+These limitations reflect real-world challenges and highlight areas for future improvement.

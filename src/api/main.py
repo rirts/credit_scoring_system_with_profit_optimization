@@ -1,4 +1,13 @@
 from fastapi import FastAPI, HTTPException
+from src.tracking.logger import log_prediction
+from src.monitoring.metrics import (
+    load_predictions,
+    compute_basic_metrics,
+    risk_distribution
+)
+from src.monitoring.drift import detect_drift
+from src.monitoring.alerts import evaluate_alerts
+from src.reporting.summary import generate_summary
 import pandas as pd
 import joblib
 import shap
@@ -16,7 +25,6 @@ model = joblib.load("models/model.pkl")
 background = joblib.load("models/background.pkl")
 THRESHOLD = joblib.load("models/threshold.pkl")
 
-# 🔥 FIX CLAVE: acceder correctamente al modelo interno
 try:
     base_pipeline = model.calibrated_classifiers_[0].estimator
 
@@ -43,9 +51,16 @@ def predict(data: CreditInput):
         
         proba = model.predict_proba(df)[0][1]
         prediction = int(proba >= THRESHOLD)
-        
+
         logging.info(f"Prediction: {proba}")
-        
+
+        # NUEVO: tracking
+        log_prediction(
+            input_data=data.dict(),
+            proba=proba,
+            decision=prediction
+        )
+
         return {
             "default_probability": float(proba),
             "prediction": prediction
@@ -107,3 +122,89 @@ def explain(data: CreditInput):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/metrics")
+def get_metrics():
+    try:
+        df = load_predictions()
+
+        basic = compute_basic_metrics(df)
+        dist = risk_distribution(df)
+
+        return {
+            **basic,
+            "risk_distribution": dist
+        }
+
+    except FileNotFoundError:
+        return {
+            "total_predictions": 0,
+            "approval_rate": 0.0,
+            "average_risk": 0.0,
+            "risk_distribution": {}
+        }
+
+    except Exception as e:
+        logging.error(f"Metrics error: {e}")
+        raise HTTPException(status_code=500, detail="Error computing metrics")
+
+@app.get("/drift")
+def get_drift():
+    try:
+        result = detect_drift()
+        return result
+
+    except FileNotFoundError:
+        return {
+            "psi": None,
+            "status": "no_data"
+        }
+
+    except Exception as e:
+        logging.error(f"Drift error: {e}")
+        raise HTTPException(status_code=500, detail="Error computing drift")
+    
+@app.get("/health")
+def system_health():
+    try:
+        df = load_predictions()
+
+        metrics = compute_basic_metrics(df)
+        metrics["risk_distribution"] = risk_distribution(df)
+
+        drift = detect_drift()
+
+        alerts = evaluate_alerts(metrics, drift)
+
+        return {
+            "metrics": metrics,
+            "drift": drift,
+            "alerts": alerts,
+            "status": "ok" if len(alerts) == 0 else "warning"
+        }
+
+    except Exception as e:
+        logging.error(f"Health check error: {e}")
+        raise HTTPException(status_code=500, detail="Error computing system health")
+
+@app.get("/report")
+def get_report():
+    try:
+        df = load_predictions()
+
+        metrics = compute_basic_metrics(df)
+        metrics["risk_distribution"] = risk_distribution(df)
+
+        drift = detect_drift()
+        alerts = evaluate_alerts(metrics, drift)
+
+        summary = generate_summary(metrics, drift, alerts)
+
+        return {
+            "summary": summary["summary"],
+            "status": "ok" if len(alerts) == 0 else "warning"
+        }
+
+    except Exception as e:
+        logging.error(f"Report error: {e}")
+        raise HTTPException(status_code=500, detail="Error generating report")
